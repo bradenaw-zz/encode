@@ -35,11 +35,11 @@ import (
 var errOverflowVarint = errors.New("encode: invalid varint")
 
 type Item interface {
-	// Encodes this item into buf. Buf will be at least Size() bytes.
+	// Encode this item into buf. buf will be at least Size() bytes.
 	Encode(buf []byte)
-	// Decodes buf into this item, mutating it to match the representation in buf.
+	// Decode buf into this item, mutating it to match the representation in buf.
 	Decode(buf []byte) error
-	// Returns the number of bytes that Encode() will use.
+	// The number of bytes that Encode() will use.
 	Size() int
 }
 
@@ -78,6 +78,25 @@ func (enc Encoding) Decode(buf []byte) error {
 	return nil
 }
 
+// Quietly ignore n bytes.
+func Padding(n int) Item {
+	return padding{n}
+}
+
+type padding struct{ n int }
+
+func (e padding) Encode(buf []byte) {}
+func (e padding) Size() int {
+	return e.n
+}
+func (e padding) Decode(buf []byte) error {
+	if len(buf) < e.n {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+
+// Encode v as itself.
 func Byte(v *byte) Item {
 	return encByte{v}
 }
@@ -98,6 +117,30 @@ func (e encByte) Decode(buf []byte) error {
 	return nil
 }
 
+// Encode v as 0x01 (true) or 0x00 (false).
+func Bool(v *bool) Item {
+	return encBool{v}
+}
+
+type encBool struct{ v *bool }
+
+func (e encBool) Encode(buf []byte) {
+	if *e.v {
+		buf[0] = 1
+	}
+}
+func (e encBool) Size() int {
+	return 1
+}
+func (e encBool) Decode(buf []byte) error {
+	if len(buf) < 1 {
+		return io.ErrUnexpectedEOF
+	}
+	*e.v = buf[0] == 1
+	return nil
+}
+
+// Encode v in big endian order, taking 2 bytes.
 func BigEndianUint16(v *uint16) Item {
 	return bigEndianUint16{v}
 }
@@ -118,6 +161,7 @@ func (e bigEndianUint16) Decode(buf []byte) error {
 	return nil
 }
 
+// Encode v in big endian order, taking 4 bytes.
 func BigEndianUint32(v *uint32) Item {
 	return bigEndianUint32{v}
 }
@@ -138,6 +182,7 @@ func (e bigEndianUint32) Decode(buf []byte) error {
 	return nil
 }
 
+// Encode v in big endian order, taking 8 bytes.
 func BigEndianUint64(v *uint64) Item {
 	return bigEndianUint64{v}
 }
@@ -158,7 +203,7 @@ func (e bigEndianUint64) Decode(buf []byte) error {
 	return nil
 }
 
-// Encodes v using a variable-length encoding, so that smaller numbers use fewer bytes.
+// Encode v using a variable-length encoding, so that smaller numbers use fewer bytes.
 //
 //   min     max          encoded size in bytes
 //   0       2^7 - 1      1
@@ -195,7 +240,7 @@ func (e uvarint32) Decode(buf []byte) error {
 	return nil
 }
 
-// Encodes v using a variable-length encoding, so that smaller numbers use fewer bytes.
+// Encode v using a variable-length encoding, so that smaller numbers use fewer bytes.
 //
 //   min     max          encoded size in bytes
 //   0       2^7 - 1      1
@@ -234,7 +279,7 @@ func (e uvarint64) Decode(buf []byte) error {
 	return nil
 }
 
-// Encodes v as a uvarint of v's length, followed by v.
+// Encode v as a uvarint of v's length, followed by v.
 func LengthDelimBytes(v *[]byte) Item {
 	return lengthDelimBytes{v}
 }
@@ -264,7 +309,7 @@ func (e lengthDelimBytes) Decode(buf []byte) error {
 	return nil
 }
 
-// Encodes v as a uvarint of v's length, followed by v.
+// Encode v as a uvarint of v's length, followed by v.
 func LengthDelimString(v *string) Item {
 	return lengthDelimString{v}
 }
@@ -290,6 +335,46 @@ func (e lengthDelimString) Decode(buf []byte) error {
 		return io.ErrUnexpectedEOF
 	}
 	*e.v = string(buf[n:])
+	return nil
+}
+
+func Bytes16(v *[16]byte) Item {
+	return bytes16{v}
+}
+
+type bytes16 struct{ v *[16]byte }
+
+func (e bytes16) Encode(buf []byte) {
+	copy(buf, (*e.v)[:])
+}
+func (e bytes16) Size() int {
+	return 16
+}
+func (e bytes16) Decode(buf []byte) error {
+	if len(buf) < 16 {
+		return io.ErrUnexpectedEOF
+	}
+	copy((*e.v)[:], buf[:16])
+	return nil
+}
+
+func Bytes32(v *[32]byte) Item {
+	return bytes32{v}
+}
+
+type bytes32 struct{ v *[32]byte }
+
+func (e bytes32) Encode(buf []byte) {
+	copy(buf, (*e.v)[:])
+}
+func (e bytes32) Size() int {
+	return 32
+}
+func (e bytes32) Decode(buf []byte) error {
+	if len(buf) < 32 {
+		return io.ErrUnexpectedEOF
+	}
+	copy((*e.v)[:], buf[:32])
 	return nil
 }
 

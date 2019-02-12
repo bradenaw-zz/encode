@@ -33,7 +33,8 @@ import (
 	"math/bits"
 )
 
-var errOverflowVarint = errors.New("encode: invalid varint")
+var ErrOverflowVarint = errors.New("encode: overflowed varint")
+var ErrInvalidBool = errors.New("encode: invalid bool, encoded value not 0 or 1")
 
 type Item interface {
 	// Encode this item into buf. buf will be at least Size() bytes.
@@ -137,7 +138,14 @@ func (e encBool) Decode(buf []byte) error {
 	if len(buf) < 1 {
 		return io.ErrUnexpectedEOF
 	}
-	*e.v = buf[0] == 1
+	switch buf[0] {
+	case 0:
+		*e.v = false
+	case 1:
+		*e.v = true
+	default:
+		return ErrInvalidBool
+	}
 	return nil
 }
 
@@ -236,10 +244,10 @@ func (e uvarint32) Decode(buf []byte) error {
 		return io.ErrUnexpectedEOF
 	}
 	if n < 0 {
-		return errOverflowVarint
+		return ErrOverflowVarint
 	}
 	if n > math.MaxUint32 {
-		return errOverflowVarint
+		return ErrOverflowVarint
 	}
 	*e.v = uint32(l)
 	return nil
@@ -282,7 +290,7 @@ func (e uvarint64) Decode(buf []byte) error {
 		return io.ErrUnexpectedEOF
 	}
 	if n < 0 {
-		return errOverflowVarint
+		return ErrOverflowVarint
 	}
 	*e.v = l
 	return nil
@@ -384,7 +392,7 @@ func (e lengthDelimBytes) Decode(buf []byte) error {
 		return io.ErrUnexpectedEOF
 	}
 	if n < 0 {
-		return errOverflowVarint
+		return ErrOverflowVarint
 	}
 	if uint64(len(buf[n:])) < l {
 		return io.ErrUnexpectedEOF
@@ -414,7 +422,7 @@ func (e lengthDelimString) Decode(buf []byte) error {
 		return io.ErrUnexpectedEOF
 	}
 	if n < 0 {
-		return errOverflowVarint
+		return ErrOverflowVarint
 	}
 	if uint64(len(buf[n:])) < l {
 		return io.ErrUnexpectedEOF

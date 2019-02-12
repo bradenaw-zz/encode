@@ -30,6 +30,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"math/bits"
 )
 
 var errOverflowVarint = errors.New("encode: invalid varint")
@@ -205,14 +206,18 @@ func (e bigEndianUint64) Decode(buf []byte) error {
 
 // Encode v using a variable-length encoding, so that smaller numbers use fewer bytes.
 //
-//   min     max          encoded size in bytes
-//   0       2^7 - 1      1
-//   2^7     2^14 - 1     2
-//   2^14    2^21 - 1     3
-//   2^21    2^28 - 1     4
-//   2^28    2^32 - 1     5
-//
 // See more at https://developers.google.com/protocol-buffers/docs/encoding#varints
+//
+//   input bits
+//   high order             low order
+//   uuuuwwwwwwwzzzzzzzyyyyyyyxxxxxxx
+//
+//   min     max          encoded size     encoding
+//   0       2^7 - 1      1                0xxxxxxx
+//   2^7     2^14 - 1     2                1xxxxxxx 0yyyyyyy
+//   2^14    2^21 - 1     3                1xxxxxxx 1yyyyyyy 0zzzzzzz
+//   2^21    2^28 - 1     4                1xxxxxxx 1yyyyyyy 1zzzzzzz 0wwwwwww
+//   2^28    2^32 - 1     5                1xxxxxxx 1yyyyyyy 1zzzzzzz 1wwwwwww 0000uuuu
 func Uvarint32(v *uint32) Item {
 	return uvarint32{v}
 }
@@ -242,19 +247,23 @@ func (e uvarint32) Decode(buf []byte) error {
 
 // Encode v using a variable-length encoding, so that smaller numbers use fewer bytes.
 //
-//   min     max          encoded size in bytes
-//   0       2^7 - 1      1
-//   2^7     2^14 - 1     2
-//   2^14    2^21 - 1     3
-//   2^21    2^28 - 1     4
-//   2^28    2^35 - 1     5
-//   2^35    2^42 - 1     6
-//   2^42    2^49 - 1     7
-//   2^49    2^56 - 1     8
-//   2^56    2^63 - 1     9
-//   2^63    2^64 - 1     10
-//
 // See more at https://developers.google.com/protocol-buffers/docs/encoding#varints
+//
+//   input bits
+//   high order                                             low order
+//   ddcccccccbbbbbbbaaaaaaavvvvvvvuuuuuuwwwwwwwzzzzzzzyyyyyyyxxxxxxx
+//
+//   min     max          encoded size     encoding
+//   0       2^7 - 1      1                0xxxxxxx
+//   2^7     2^14 - 1     2                1xxxxxxx 0yyyyyyy
+//   2^14    2^21 - 1     3                1xxxxxxx 1yyyyyyy 0zzzzzzz
+//   2^21    2^28 - 1     4                1xxxxxxx 1yyyyyyy 1zzzzzzz 0wwwwwww
+//   2^28    2^35 - 1     5                1xxxxxxx 1yyyyyyy 1zzzzzzz 1wwwwwww 0uuuuuuu
+//   2^35    2^42 - 1     6                1xxxxxxx 1yyyyyyy 1zzzzzzz 1wwwwwww 1uuuuuuu 0vvvvvvv
+//   2^42    2^49 - 1     7                1xxxxxxx 1yyyyyyy 1zzzzzzz 1wwwwwww 1uuuuuuu 1vvvvvvv 0aaaaaaa
+//   2^49    2^56 - 1     8                1xxxxxxx 1yyyyyyy 1zzzzzzz 1wwwwwww 1uuuuuuu 1vvvvvvv 1aaaaaaa 0bbbbbbb
+//   2^56    2^63 - 1     9                1xxxxxxx 1yyyyyyy 1zzzzzzz 1wwwwwww 1uuuuuuu 1vvvvvvv 1aaaaaaa 1bbbbbbb 0ccccccc
+//   2^63    2^64 - 1     10               1xxxxxxx 1yyyyyyy 1zzzzzzz 1wwwwwww 1uuuuuuu 1vvvvvvv 1aaaaaaa 1bbbbbbb 1ccccccc 000000dd
 func Uvarint64(v *uint64) Item {
 	return uvarint64{v}
 }
@@ -276,6 +285,82 @@ func (e uvarint64) Decode(buf []byte) error {
 		return errOverflowVarint
 	}
 	*e.v = l
+	return nil
+}
+
+// Similar to Uvarint64, produces a variable-length encoding for v. However, it has two advantages:
+// it preserves ordering, in that the encoded bytes will lexicographically order the same as the
+// inputs would be ordered numerically; and it uses one fewer byte for numbers larger than 2^63-1.
+//
+// It does this by using a similar technique to UTF-8 (see
+// https://en.wikipedia.org/wiki/UTF-8#Examples), where only significant bits are encoded, and a
+// number of leading ones is used to determine the length of the encoding.
+//
+//   min     max          encoded size     encoding, where x is an input bit
+//   0       2^7 - 1      1                0xxxxxxx
+//   2^7     2^14 - 1     2                10xxxxxx xxxxxxxx
+//   2^14    2^21 - 1     3                110xxxxx xxxxxxxx xxxxxxxx
+//   2^21    2^28 - 1     4                1110xxxx xxxxxxxx xxxxxxxx xxxxxxxx
+//   2^28    2^35 - 1     5                11110xxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
+//   2^35    2^42 - 1     6                111110xx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
+//   2^42    2^49 - 1     7                1111110x xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
+//   2^49    2^56 - 1     8                11111110 xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
+//   2^56    2^64 - 1     9                11111111 xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
+func OrdUvarint64(v *uint64) Item {
+	return ordUvarint64{v}
+}
+
+type ordUvarint64 struct{ v *uint64 }
+
+func (e ordUvarint64) Encode(buf []byte) {
+	l := bits.Len64(*e.v)
+	if l > 56 {
+		buf[0] = 0xFF
+		binary.BigEndian.PutUint64(buf[1:], *e.v)
+		return
+	}
+
+	nBytes := (l + 6) / 7
+	nLeadingOnes := nBytes - 1
+	buf[0] = ((1 << uint(nLeadingOnes)) - 1) << uint(8-nLeadingOnes)
+	for i := 0; i < nBytes; i++ {
+		buf[i] |= byte(*e.v >> uint((nBytes-i-1)*8))
+	}
+}
+func (e ordUvarint64) Size() int {
+	l := bits.Len64(*e.v)
+	if l > 56 {
+		return 9
+	}
+	return 1 + (l-1)/7
+}
+func (e ordUvarint64) Decode(buf []byte) error {
+	if len(buf) < 1 {
+		return io.ErrUnexpectedEOF
+	}
+	nLeadingOnes := bits.LeadingZeros8(^buf[0])
+	nBytes := nLeadingOnes + 1
+	rBits := nBytes * 7
+	rBytes := (rBits + 8) / 8
+
+	if rBits == 63 {
+		if len(buf) < 9 {
+			return io.ErrUnexpectedEOF
+		}
+		*e.v = binary.BigEndian.Uint64(buf[1:])
+		return nil
+	}
+
+	if len(buf) < nBytes {
+		return io.ErrUnexpectedEOF
+	}
+	result := uint64(0)
+	for i := 0; i < nBytes; i++ {
+		shift := (rBytes * 8) - (i * 8) - 8
+		result |= uint64(buf[i]) << uint(shift)
+	}
+	mask := (uint64(1) << uint(rBits)) - 1
+	*e.v = result & mask
 	return nil
 }
 
@@ -338,6 +423,7 @@ func (e lengthDelimString) Decode(buf []byte) error {
 	return nil
 }
 
+// Encode a fixed-length 16 bytes directly.
 func Bytes16(v *[16]byte) Item {
 	return bytes16{v}
 }
@@ -358,6 +444,7 @@ func (e bytes16) Decode(buf []byte) error {
 	return nil
 }
 
+// Encode a fixed-length 32 bytes directly.
 func Bytes32(v *[32]byte) Item {
 	return bytes32{v}
 }

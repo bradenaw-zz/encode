@@ -29,6 +29,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"math"
 )
 
 var errOverflowVarint = errors.New("encode: invalid varint")
@@ -174,10 +175,10 @@ func Uvarint32(v *uint32) Item {
 type uvarint32 struct{ v *uint32 }
 
 func (e uvarint32) Encode(buf []byte) {
-	binary.BigEndian.PutUvarint(buf, uint64(*e.v))
+	binary.PutUvarint(buf, uint64(*e.v))
 }
 func (e uvarint32) Size() int {
-	return uvarintSize(*e.v)
+	return uvarintSize(uint64(*e.v))
 }
 func (e uvarint32) Decode(buf []byte) error {
 	l, n := binary.Uvarint(buf)
@@ -216,7 +217,7 @@ func Uvarint64(v *uint64) Item {
 type uvarint64 struct{ v *uint64 }
 
 func (e uvarint64) Encode(buf []byte) {
-	binary.BigEndian.PutUvarint(buf, *e.v)
+	binary.PutUvarint(buf, *e.v)
 }
 func (e uvarint64) Size() int {
 	return uvarintSize(*e.v)
@@ -230,33 +231,6 @@ func (e uvarint64) Decode(buf []byte) error {
 		return errOverflowVarint
 	}
 	*e.v = l
-	return nil
-}
-
-// Encodes each value as a single bit.
-func BitFlags(v ...*bool) Item {
-	return bitFlags{v}
-}
-
-type bitFlags struct{ v []*bool }
-
-func (e bitFlags) Encode(buf []byte) {
-	for i := range e.v {
-		if *e.v[i] {
-			buf[i/8] |= 1 << uint(7-(i%8))
-		}
-	}
-}
-func (e bitFlags) Size() int {
-	return (len(e.v) + 7) / 8
-}
-func (e bitFlags) Decode(buf []byte) error {
-	if len(buf) < e.Size() {
-		return io.ErrUnexpectedEOF
-	}
-	for i := range e.v {
-		*e.v[i] = (buf[i/8] >> uint(7-(i%8)) & 1) == 1
-	}
 	return nil
 }
 

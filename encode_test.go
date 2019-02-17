@@ -115,9 +115,13 @@ func TestOrdVarint64(t *testing.T) {
 	checkEncoding(1, []byte{0x81})
 	checkEncoding(-1, []byte{0x7F})
 	checkEncoding(-2, []byte{0x7E})
+	checkEncoding(-64, []byte{0x40})
+	checkEncoding(-65, []byte{0x3F, 0xBF}) // 00111111 10111111
+	checkEncoding(64, []byte{0xC0, 0x40})  // 11000000 01000000
 	checkEncoding(int64(1<<63-1), []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
 
 	checkOrdering(-125, -5)
+	checkOrdering(-65, -1)
 	checkOrdering(-64, -1)
 	checkOrdering(-32, -1)
 	checkOrdering(-576, 15)
@@ -137,6 +141,8 @@ func TestOrdVarint64(t *testing.T) {
 	checkOrdering(1<<42, 1<<49)
 	checkOrdering(1<<49, 1<<56)
 	checkOrdering(1<<56, 1<<63-1)
+	checkOrdering(-1<<6, 1<<6)
+	checkOrdering(-1<<13, 1<<13-1)
 
 	trand.RandomN(t, 10000, func(t *testing.T, r *rand.Rand) {
 		x1 := int64(r.Uint64()) >> uint(r.Int()%64)

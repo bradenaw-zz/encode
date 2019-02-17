@@ -383,14 +383,14 @@ func (e ordUvarint64) Decode(buf []byte) error {
 // following scheme:
 //
 //   min     max          encoded size     encoding, where x is an input bit
-//   -2^63   -2^55 + 1    9                00000000 0xxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
-//   -2^55   -2^48 + 1    8                00000000 1xxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
-//   -2^48   -2^41 + 1    7                00000001 xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
-//   -2^41   -2^34 + 1    6                0000001x xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
-//   -2^34   -2^27 + 1    5                000001xx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
-//   -2^27   -2^20 + 1    4                00001xxx xxxxxxxx xxxxxxxx xxxxxxxx
-//   -2^20   -2^13 + 1    3                0001xxxx xxxxxxxx xxxxxxxx
-//   -2^13   -2^6 + 1     2                001xxxxx xxxxxxxx
+//   -2^63   -2^55 - 1    9                00000000 0xxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
+//   -2^55   -2^48 - 1    8                00000000 1xxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
+//   -2^48   -2^41 - 1    7                00000001 xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
+//   -2^41   -2^34 - 1    6                0000001x xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
+//   -2^34   -2^27 - 1    5                000001xx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
+//   -2^27   -2^20 - 1    4                00001xxx xxxxxxxx xxxxxxxx xxxxxxxx
+//   -2^20   -2^13 - 1    3                0001xxxx xxxxxxxx xxxxxxxx
+//   -2^13   -2^6 - 1     2                001xxxxx xxxxxxxx
 //   -2^6    -1           1                01xxxxxx
 //   0       2^6 - 1      1                10xxxxxx
 //   2^6     2^13 - 1     2                110xxxxx xxxxxxxx
@@ -409,7 +409,7 @@ type ordVarint64 struct{ v *int64 }
 
 func (e ordVarint64) Encode(buf []byte) {
 	switch {
-	case *e.v <= -(1<<55)+1:
+	case *e.v <= -(1<<55)-1:
 		buf[0] = 0x00
 		buf[1] = byte(*e.v>>56) & 0x7F
 		buf[2] = byte(*e.v >> 48)
@@ -419,7 +419,7 @@ func (e ordVarint64) Encode(buf []byte) {
 		buf[6] = byte(*e.v >> 16)
 		buf[7] = byte(*e.v >> 8)
 		buf[8] = byte(*e.v)
-	case -(1<<55) <= *e.v && *e.v <= -(1<<48)+1:
+	case -(1<<55) <= *e.v && *e.v <= -(1<<48)-1:
 		buf[0] = 0x00
 		buf[1] = 0x80 | byte(*e.v>>48)
 		buf[2] = byte(*e.v >> 40)
@@ -428,7 +428,7 @@ func (e ordVarint64) Encode(buf []byte) {
 		buf[5] = byte(*e.v >> 16)
 		buf[6] = byte(*e.v >> 8)
 		buf[7] = byte(*e.v)
-	case -(1<<48) <= *e.v && *e.v <= -(1<<41)+1:
+	case -(1<<48) <= *e.v && *e.v <= -(1<<41)-1:
 		buf[0] = 0x01
 		buf[1] = byte(*e.v >> 40)
 		buf[2] = byte(*e.v >> 32)
@@ -436,29 +436,29 @@ func (e ordVarint64) Encode(buf []byte) {
 		buf[4] = byte(*e.v >> 16)
 		buf[5] = byte(*e.v >> 8)
 		buf[6] = byte(*e.v)
-	case -(1<<41) <= *e.v && *e.v <= -(1<<34)+1:
+	case -(1<<41) <= *e.v && *e.v <= -(1<<34)-1:
 		buf[0] = 0x02 | (byte(*e.v>>40) & 0x01)
 		buf[1] = byte(*e.v >> 32)
 		buf[2] = byte(*e.v >> 24)
 		buf[3] = byte(*e.v >> 16)
 		buf[4] = byte(*e.v >> 8)
 		buf[5] = byte(*e.v)
-	case -(1<<34) <= *e.v && *e.v <= -(1<<27)+1:
+	case -(1<<34) <= *e.v && *e.v <= -(1<<27)-1:
 		buf[0] = 0x04 | (byte(*e.v>>32) & 0x03)
 		buf[1] = byte(*e.v >> 24)
 		buf[2] = byte(*e.v >> 16)
 		buf[3] = byte(*e.v >> 8)
 		buf[4] = byte(*e.v)
-	case -(1<<27) <= *e.v && *e.v <= -(1<<20)+1:
+	case -(1<<27) <= *e.v && *e.v <= -(1<<20)-1:
 		buf[0] = 0x08 | (byte(*e.v>>24) & 0x07)
 		buf[1] = byte(*e.v >> 16)
 		buf[2] = byte(*e.v >> 8)
 		buf[3] = byte(*e.v)
-	case -(1<<20) <= *e.v && *e.v <= -(1<<13)+1:
+	case -(1<<20) <= *e.v && *e.v <= -(1<<13)-1:
 		buf[0] = 0x10 | (byte(*e.v>>16) & 0x0F)
 		buf[1] = byte(*e.v >> 8)
 		buf[2] = byte(*e.v)
-	case -(1<<13) <= *e.v && *e.v <= -(1<<6)+1:
+	case -(1<<13) <= *e.v && *e.v <= -(1<<6)-1:
 		buf[0] = 0x20 | (byte(*e.v>>8) & 0x1F)
 		buf[1] = byte(*e.v)
 	case -(1<<6) <= *e.v && *e.v <= -1:
@@ -520,43 +520,11 @@ func (e ordVarint64) Encode(buf []byte) {
 	}
 }
 func (e ordVarint64) Size() int {
-	switch {
-	case *e.v <= -(1<<55)+1:
-		return 9
-	case -(1<<55) <= *e.v && *e.v <= -(1<<48)+1:
-		return 8
-	case -(1<<48) <= *e.v && *e.v <= -(1<<41)+1:
-		return 7
-	case -(1<<41) <= *e.v && *e.v <= -(1<<34)+1:
-		return 6
-	case -(1<<34) <= *e.v && *e.v <= -(1<<27)+1:
-		return 5
-	case -(1<<27) <= *e.v && *e.v <= -(1<<20)+1:
-		return 4
-	case -(1<<20) <= *e.v && *e.v <= -(1<<13)+1:
-		return 3
-	case -(1<<13) <= *e.v && *e.v <= -(1<<6)+1:
-		return 2
-	case -(1<<6) <= *e.v && *e.v <= (1<<6)-1:
-		return 1
-	case (1<<6) <= *e.v && *e.v <= (1<<13)-1:
-		return 2
-	case (1<<13) <= *e.v && *e.v <= (1<<20)-1:
-		return 3
-	case (1<<20) <= *e.v && *e.v <= (1<<27)-1:
-		return 4
-	case (1<<27) <= *e.v && *e.v <= (1<<34)-1:
-		return 5
-	case (1<<34) <= *e.v && *e.v <= (1<<41)-1:
-		return 6
-	case (1<<41) <= *e.v && *e.v <= (1<<48)-1:
-		return 7
-	case (1<<48) <= *e.v && *e.v <= (1<<55)-1:
-		return 8
-	case (1 << 55) <= *e.v:
-		return 9
-	}
-	return -1
+	v := *e.v
+	signMask := uint64(v >> 63)
+	uv := uint64(v)
+	l := bits.Len64(uv ^ signMask)
+	return 1 + l/7 - l/63
 }
 func (e ordVarint64) Decode(buf []byte) error {
 	if len(buf) < 1 {

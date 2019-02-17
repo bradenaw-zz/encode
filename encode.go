@@ -26,6 +26,7 @@
 package encode
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -382,7 +383,7 @@ func (e ordUvarint64) Decode(buf []byte) error {
 // following scheme:
 //
 //   min     max          encoded size     encoding, where x is an input bit
-//   -2^63   -2^48 + 1    9                00000000 0xxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
+//   -2^63   -2^55 + 1    9                00000000 0xxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
 //   -2^55   -2^48 + 1    8                00000000 1xxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
 //   -2^48   -2^41 + 1    7                00000001 xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
 //   -2^41   -2^34 + 1    6                0000001x xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
@@ -399,7 +400,7 @@ func (e ordUvarint64) Decode(buf []byte) error {
 //   2^34    2^41 - 1     6                1111110x xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
 //   2^41    2^48 - 1     7                11111110 xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
 //   2^48    2^55 - 1     8                11111111 0xxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
-//   2^48    2^63 - 1     9                11111111 1xxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
+//   2^55    2^63 - 1     9                11111111 1xxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
 func OrdVarint64(v *int64) Item {
 	return ordVarint64{v}
 }
@@ -737,6 +738,55 @@ func (e ordVarint64) Decode(buf []byte) error {
 		}
 	default:
 		return ErrInvalidVarint
+	}
+	return nil
+}
+
+// Encodes v, using {delim,0x00} as the ending delimeter. delim is allowed to appear in v, and will
+// be escaped with one additional byte per occurrence.
+func DelimBytes(v *[]byte, delim byte) Item {
+	return delimBytes{v: v, delim: delim}
+}
+
+type delimBytes struct {
+	v     *[]byte
+	delim byte
+}
+
+func (e delimBytes) Encode(buf []byte) {
+	i := 0
+	j := 0
+	for i = 0; i < len(buf); i++ {
+		item := (*e.v)[i]
+		buf[i+j] = item
+		if item == e.delim {
+			buf[i+j+1] = 0xFF
+			j++
+		}
+	}
+	buf[i+j] = e.delim
+	buf[i+j+1] = 0x00
+}
+func (e delimBytes) Size() int {
+	// All of the bytes of the input, plus one byte to escape each occurrence of `delim`, plus two
+	// for the ending delimiter.
+	return len(*e.v) + bytes.Count(*e.v, []byte{e.delim}) + 2
+}
+func (e delimBytes) Decode(buf []byte) error {
+	j := 0
+	for i := 0; i < len(buf); i++ {
+		item := buf[i]
+		(*e.v)[i-j] = item
+		if item == e.delim {
+			if len(buf) <= i+1 {
+				return io.ErrUnexpectedEOF
+			}
+			j++
+			i++
+			if buf[i+1] == 0x00 {
+				break
+			}
+		}
 	}
 	return nil
 }

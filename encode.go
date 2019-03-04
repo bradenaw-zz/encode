@@ -10,7 +10,7 @@
 //
 //   func (e encodableFoo) encoding() encode.Encoding {
 //   	return encode.New(
-//   		encode.BigEndianUint16(&e.a),
+//   		encode.FixedUint16(&e.a),
 //   		encode.LengthDelimString(&e.b),
 //   		encode.Bool(&e.c),
 //   	)
@@ -83,13 +83,16 @@ func (enc Encoding) Decode(buf []byte) error {
 }
 
 // Quietly ignore n bytes.
-func Padding(n int) Item {
+func Padding(n int) TupleItem {
 	return padding{n}
 }
 
 type padding struct{ n int }
 
-func (e padding) Encode(buf []byte) {}
+func (e padding) EncodeTuple(buf []byte, last bool)       { e.Encode(buf) }
+func (e padding) DecodeTuple(buf []byte, last bool) error { return e.Decode(buf) }
+func (e padding) SizeTuple(last bool) int                 { return e.Size() }
+func (e padding) Encode(buf []byte)                       {}
 func (e padding) Size() int {
 	return e.n
 }
@@ -101,12 +104,15 @@ func (e padding) Decode(buf []byte) error {
 }
 
 // Encode v as itself.
-func Byte(v *byte) Item {
+func Byte(v *byte) TupleItem {
 	return encByte{v}
 }
 
 type encByte struct{ v *byte }
 
+func (e encByte) EncodeTuple(buf []byte, last bool)       { e.Encode(buf) }
+func (e encByte) DecodeTuple(buf []byte, last bool) error { return e.Decode(buf) }
+func (e encByte) SizeTuple(last bool) int                 { return e.Size() }
 func (e encByte) Encode(buf []byte) {
 	buf[0] = *e.v
 }
@@ -122,12 +128,15 @@ func (e encByte) Decode(buf []byte) error {
 }
 
 // Encode v as 0x01 (true) or 0x00 (false).
-func Bool(v *bool) Item {
+func Bool(v *bool) TupleItem {
 	return encBool{v}
 }
 
 type encBool struct{ v *bool }
 
+func (e encBool) EncodeTuple(buf []byte, last bool)       { e.Encode(buf) }
+func (e encBool) DecodeTuple(buf []byte, last bool) error { return e.Decode(buf) }
+func (e encBool) SizeTuple(last bool) int                 { return e.Size() }
 func (e encBool) Encode(buf []byte) {
 	if *e.v {
 		buf[0] = 1
@@ -152,19 +161,22 @@ func (e encBool) Decode(buf []byte) error {
 }
 
 // Encode v in big endian order, taking 2 bytes.
-func BigEndianUint16(v *uint16) Item {
-	return bigEndianUint16{v}
+func FixedUint16(v *uint16) TupleItem {
+	return fixedUint16{v}
 }
 
-type bigEndianUint16 struct{ v *uint16 }
+type fixedUint16 struct{ v *uint16 }
 
-func (e bigEndianUint16) Encode(buf []byte) {
+func (e fixedUint16) EncodeTuple(buf []byte, last bool)       { e.Encode(buf) }
+func (e fixedUint16) DecodeTuple(buf []byte, last bool) error { return e.Decode(buf) }
+func (e fixedUint16) SizeTuple(last bool) int                 { return e.Size() }
+func (e fixedUint16) Encode(buf []byte) {
 	binary.BigEndian.PutUint16(buf, *e.v)
 }
-func (e bigEndianUint16) Size() int {
+func (e fixedUint16) Size() int {
 	return 2
 }
-func (e bigEndianUint16) Decode(buf []byte) error {
+func (e fixedUint16) Decode(buf []byte) error {
 	if len(buf) < 2 {
 		return io.ErrUnexpectedEOF
 	}
@@ -173,19 +185,22 @@ func (e bigEndianUint16) Decode(buf []byte) error {
 }
 
 // Encode v in big endian order, taking 4 bytes.
-func BigEndianUint32(v *uint32) Item {
-	return bigEndianUint32{v}
+func FixedUint32(v *uint32) TupleItem {
+	return fixedUint32{v}
 }
 
-type bigEndianUint32 struct{ v *uint32 }
+type fixedUint32 struct{ v *uint32 }
 
-func (e bigEndianUint32) Encode(buf []byte) {
+func (e fixedUint32) EncodeTuple(buf []byte, last bool)       { e.Encode(buf) }
+func (e fixedUint32) DecodeTuple(buf []byte, last bool) error { return e.Decode(buf) }
+func (e fixedUint32) SizeTuple(last bool) int                 { return e.Size() }
+func (e fixedUint32) Encode(buf []byte) {
 	binary.BigEndian.PutUint32(buf, *e.v)
 }
-func (e bigEndianUint32) Size() int {
+func (e fixedUint32) Size() int {
 	return 4
 }
-func (e bigEndianUint32) Decode(buf []byte) error {
+func (e fixedUint32) Decode(buf []byte) error {
 	if len(buf) < 4 {
 		return io.ErrUnexpectedEOF
 	}
@@ -194,19 +209,22 @@ func (e bigEndianUint32) Decode(buf []byte) error {
 }
 
 // Encode v in big endian order, taking 8 bytes.
-func BigEndianUint64(v *uint64) Item {
-	return bigEndianUint64{v}
+func FixedUint64(v *uint64) TupleItem {
+	return fixedUint64{v}
 }
 
-type bigEndianUint64 struct{ v *uint64 }
+type fixedUint64 struct{ v *uint64 }
 
-func (e bigEndianUint64) Encode(buf []byte) {
+func (e fixedUint64) EncodeTuple(buf []byte, last bool)       { e.Encode(buf) }
+func (e fixedUint64) DecodeTuple(buf []byte, last bool) error { return e.Decode(buf) }
+func (e fixedUint64) SizeTuple(last bool) int                 { return e.Size() }
+func (e fixedUint64) Encode(buf []byte) {
 	binary.BigEndian.PutUint64(buf, *e.v)
 }
-func (e bigEndianUint64) Size() int {
+func (e fixedUint64) Size() int {
 	return 8
 }
-func (e bigEndianUint64) Decode(buf []byte) error {
+func (e fixedUint64) Decode(buf []byte) error {
 	if len(buf) < 8 {
 		return io.ErrUnexpectedEOF
 	}
@@ -316,12 +334,15 @@ func (e uvarint64) Decode(buf []byte) error {
 //   2^42    2^49 - 1     7                1111110x xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
 //   2^49    2^56 - 1     8                11111110 xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
 //   2^56    2^64 - 1     9                11111111 xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
-func OrdUvarint64(v *uint64) Item {
+func OrdUvarint64(v *uint64) TupleItem {
 	return ordUvarint64{v}
 }
 
 type ordUvarint64 struct{ v *uint64 }
 
+func (e ordUvarint64) EncodeTuple(buf []byte, last bool)       { e.Encode(buf) }
+func (e ordUvarint64) DecodeTuple(buf []byte, last bool) error { return e.Decode(buf) }
+func (e ordUvarint64) SizeTuple(last bool) int                 { return e.Size() }
 func (e ordUvarint64) Encode(buf []byte) {
 	l := bits.Len64(*e.v)
 	if l > 56 {
@@ -401,12 +422,15 @@ func (e ordUvarint64) Decode(buf []byte) error {
 //   2^41    2^48 - 1     7                11111110 xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
 //   2^48    2^55 - 1     8                11111111 0xxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
 //   2^55    2^63 - 1     9                11111111 1xxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
-func OrdVarint64(v *int64) Item {
+func OrdVarint64(v *int64) TupleItem {
 	return ordVarint64{v}
 }
 
 type ordVarint64 struct{ v *int64 }
 
+func (e ordVarint64) EncodeTuple(buf []byte, last bool) {
+	e.Encode(buf)
+}
 func (e ordVarint64) Encode(buf []byte) {
 	switch {
 	case *e.v <= -(1<<55)-1:
@@ -519,12 +543,18 @@ func (e ordVarint64) Encode(buf []byte) {
 		buf[8] = byte(*e.v)
 	}
 }
+func (e ordVarint64) SizeTuple(last bool) int {
+	return e.Size()
+}
 func (e ordVarint64) Size() int {
 	v := *e.v
 	signMask := uint64(v >> 63)
 	uv := uint64(v)
 	l := bits.Len64(uv ^ signMask)
 	return 1 + l/7 - l/63
+}
+func (e ordVarint64) DecodeTuple(buf []byte, last bool) error {
+	return e.Decode(buf)
 }
 func (e ordVarint64) Decode(buf []byte) error {
 	if len(buf) < 1 {
@@ -711,8 +741,8 @@ func (e ordVarint64) Decode(buf []byte) error {
 }
 
 // Encodes v, using {delim,0x00} as the ending delimeter. delim is allowed to appear in v, and will
-// be escaped with one additional byte per occurrence.
-func DelimBytes(v *[]byte, delim byte) Item {
+// be escaped with a following 0xFF per occurrence.
+func DelimBytes(v *[]byte, delim byte) TupleItem {
 	return delimBytes{v: v, delim: delim}
 }
 
@@ -722,30 +752,45 @@ type delimBytes struct {
 }
 
 func (e delimBytes) Encode(buf []byte) {
+	e.EncodeTuple(buf, false)
+}
+func (e delimBytes) EncodeTuple(buf []byte, last bool) {
 	i := 0
 	j := 0
 	for i = 0; i < len(buf); i++ {
-		item := (*e.v)[i]
-		buf[i+j] = item
-		if item == e.delim {
+		b := (*e.v)[i]
+		buf[i+j] = b
+		if b == e.delim {
 			buf[i+j+1] = 0xFF
 			j++
 		}
 	}
-	buf[i+j] = e.delim
-	buf[i+j+1] = 0x00
+	if !last {
+		buf[i+j] = e.delim
+		buf[i+j+1] = 0x00
+	}
 }
 func (e delimBytes) Size() int {
+	return e.SizeTuple(false)
+}
+func (e delimBytes) SizeTuple(last bool) int {
 	// All of the bytes of the input, plus one byte to escape each occurrence of `delim`, plus two
-	// for the ending delimiter.
-	return len(*e.v) + bytes.Count(*e.v, []byte{e.delim}) + 2
+	// for the ending delimiter if it's not the end of a prefix.
+	n := len(*e.v) + bytes.Count(*e.v, []byte{e.delim})
+	if !last {
+		n += 2
+	}
+	return n
 }
 func (e delimBytes) Decode(buf []byte) error {
+	return e.DecodeTuple(buf, false)
+}
+func (e delimBytes) DecodeTuple(buf []byte, last bool) error {
 	j := 0
 	for i := 0; i < len(buf); i++ {
-		item := buf[i]
-		(*e.v)[i-j] = item
-		if item == e.delim {
+		b := buf[i]
+		(*e.v)[i-j] = b
+		if b == e.delim && !(i == len(buf)-1 && last) {
 			if len(buf) <= i+1 {
 				return io.ErrUnexpectedEOF
 			}
@@ -819,12 +864,15 @@ func (e lengthDelimString) Decode(buf []byte) error {
 }
 
 // Encode a fixed-length 16 bytes directly.
-func Bytes16(v *[16]byte) Item {
+func Bytes16(v *[16]byte) TupleItem {
 	return bytes16{v}
 }
 
 type bytes16 struct{ v *[16]byte }
 
+func (e bytes16) EncodeTuple(buf []byte, last bool)       { e.Encode(buf) }
+func (e bytes16) DecodeTuple(buf []byte, last bool) error { return e.Decode(buf) }
+func (e bytes16) SizeTuple(last bool) int                 { return e.Size() }
 func (e bytes16) Encode(buf []byte) {
 	copy(buf, (*e.v)[:])
 }
@@ -840,12 +888,15 @@ func (e bytes16) Decode(buf []byte) error {
 }
 
 // Encode a fixed-length 32 bytes directly.
-func Bytes32(v *[32]byte) Item {
+func Bytes32(v *[32]byte) TupleItem {
 	return bytes32{v}
 }
 
 type bytes32 struct{ v *[32]byte }
 
+func (e bytes32) EncodeTuple(buf []byte, last bool)       { e.Encode(buf) }
+func (e bytes32) DecodeTuple(buf []byte, last bool) error { return e.Decode(buf) }
+func (e bytes32) SizeTuple(last bool) int                 { return e.Size() }
 func (e bytes32) Encode(buf []byte) {
 	copy(buf, (*e.v)[:])
 }

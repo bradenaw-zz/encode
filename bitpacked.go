@@ -21,10 +21,14 @@ type bitpacked struct{ items []BitpackItem }
 
 // Encodes the bitpacked items, from high-order to low-order, packed directly next to each other.
 // Pads the end to the nearest byte.
-func Bitpacked(items ...BitpackItem) Item {
+func Bitpacked(items ...BitpackItem) TupleItem {
 	return bitpacked{items: items}
 }
 
+func (e bitpacked) EncodeTuple(buf []byte, last bool)       { e.Encode(buf) }
+func (e bitpacked) DecodeTuple(buf []byte, last bool) error { return e.Decode(buf) }
+func (e bitpacked) SizeTuple(last bool) int                 { return e.Size() }
+func (e bitpacked) OrderPreserving()                        {}
 func (b bitpacked) Encode(buf []byte) {
 	bitBuf := bitBuffer{b: buf, i: 0}
 	for _, item := range b.items {
